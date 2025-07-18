@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 interface Params {
   params: {
@@ -10,15 +10,15 @@ interface Params {
 export async function DELETE(request: Request, { params }: Params) {
   const id = parseInt(params.id);
   if (isNaN(id)) {
-    return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+    return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
   }
 
   try {
     await prisma.todo.delete({
       where: { id },
     });
-    return NextResponse.json({ message: 'Todo deleted' }, { status: 200 });
+    return NextResponse.json({ message: "Todo deleted" }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ error: 'Error deleting todo' }, { status: 500 });
+    return NextResponse.json({ error: "Error deleting todo" }, { status: 500 });
   }
 }

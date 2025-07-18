@@ -1,6 +1,6 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { TodoDto } from '@/app/shared/todoDto';
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { TodoDto } from "@/app/shared/todoDto";
 
 export async function GET() {
   try {
@@ -28,18 +28,18 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const { title, dueDate } = await request.json();
-    
-    if (!title || title.trim() === '') {
-      return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+
+    if (!title || title.trim() === "") {
+      return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
     const todo = await prisma.todo.create({
       data: {
         title,
-        dueDate
+        dueDate,
       },
     });
     return NextResponse.json(todo, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: 'Error creating todo' }, { status: 500 });
+    return NextResponse.json({ error: "Error creating todo" }, { status: 500 });
   }
 }
