@@ -19,6 +19,7 @@ export async function DELETE(request: Request, { params }: Params) {
     });
     return NextResponse.json({ message: "Todo deleted" }, { status: 200 });
   } catch (error) {
+    console.log(error);
     return NextResponse.json({ error: "Error deleting todo" }, { status: 500 });
   }
 }

@@ -12,4 +12,6 @@ model Todo {
   title     String
   createdAt DateTime  @default(now())
   dueDate DateTime?
+  description String @default("")
+  imageUrl String @default("")
 }

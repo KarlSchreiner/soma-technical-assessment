@@ -1,17 +1,14 @@
 "use client";
 import { Todo } from "@prisma/client";
 import { useState, useEffect } from "react";
-import { TodoDto } from "./shared/todoDto";
-interface TodoInput {
-  title: string;
-  dueDate: Date | null;
-}
+import { TodoDto, todoCreateDto } from "./shared/todoDto";
 
 export default function Home() {
   const [newTodo, setNewTodo] = useState({
     title: "",
     dueDate: null,
-  } as TodoInput);
+    description: "",
+  } as todoCreateDto);
   const [todos, setTodos] = useState([] as Todo[]);
 
   useEffect(() => {
@@ -27,6 +24,8 @@ export default function Home() {
         title: todo.title,
         createdAt: new Date(todo.createdAt),
         dueDate: todo.dueDate ? new Date(todo.dueDate) : null,
+        description: todo.description,
+        imageUrl: todo.imageUrl,
       }));
       setTodos(todoItems);
     } catch (error) {
@@ -42,7 +41,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newTodo),
       });
-      setNewTodo({ title: "", dueDate: null });
+      setNewTodo({ title: "", dueDate: null, description: "" });
       fetchTodos();
     } catch (error) {
       console.error("Failed to add todo:", error);
@@ -80,14 +79,23 @@ export default function Home() {
             }
           />
           <input
-            type="date"
-            value={
-              newTodo.dueDate ? newTodo.dueDate.toISOString().split("T")[0] : ""
-            }
+            type="text"
+            placeholder="Description"
+            value={newTodo.description}
             onChange={(e) =>
               setNewTodo((prev) => ({
                 ...prev,
-                dueDate: e.target.value ? new Date(e.target.value) : null,
+                description: e.target.value,
+              }))
+            }
+          />
+          <input
+            type="date"
+            value={newTodo.dueDate ? newTodo.dueDate.split("T")[0] : ""}
+            onChange={(e) =>
+              setNewTodo((prev) => ({
+                ...prev,
+                dueDate: e.target.value,
               }))
             }
           />
@@ -110,9 +118,17 @@ export default function Home() {
                 }`}
               >
                 <span className="text-gray-800">{todo.title}</span>
+                <span className="text-gray-800">{todo.description}</span>
                 <span className="text-gray-800">
                   {todo.dueDate?.toDateString()}
                 </span>
+                {todo.imageUrl && (
+                  <img
+                    src={todo.imageUrl}
+                    alt={todo.title}
+                    className="w-12 h-12 object-cover rounded-full"
+                  />
+                )}
                 <button
                   onClick={() => handleDeleteTodo(todo.id)}
                   className="text-red-500 hover:text-red-700 transition duration-300"
