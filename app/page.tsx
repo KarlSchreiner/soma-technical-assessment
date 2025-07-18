@@ -61,7 +61,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-500 to-red-500 flex flex-col items-center p-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md flex flex-col items-center">
         <h1 className="text-4xl font-bold text-center text-white mb-8">
           Things To Do App
         </h1>
@@ -117,9 +117,13 @@ export default function Home() {
                   isOverdue ? "bg-red-300" : "bg-white"
                 }`}
               >
-                <span className="text-gray-800">{todo.title}</span>
-                <span className="text-gray-800">{todo.description}</span>
-                <span className="text-gray-800">
+                <div className="flex-1">
+                  <p className="text-lg font-semibold text-gray-800">
+                    {todo.title}
+                  </p>
+                  <p className="text-sm text-gray-600">{todo.description}</p>
+                </div>
+                <span className="text-sm text-gray-600 whitespace-nowrap">
                   {todo.dueDate?.toDateString()}
                 </span>
                 {todo.imageUrl && (
