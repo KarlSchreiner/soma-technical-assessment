@@ -14,4 +14,8 @@ model Todo {
   dueDate DateTime?
   description String @default("")
   imageUrl String @default("")
+  workUnits Int?
+
+  dependencies  Todo[]  @relation("TaskDependencies")
+  dependents   Todo[] @relation("TaskDependencies") 
 }
