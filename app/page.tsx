@@ -1,5 +1,5 @@
 "use client";
-import { Todo } from "@prisma/client";
+import toast, { Toaster } from "react-hot-toast";
 import { useState, useEffect } from "react";
 import { TodoDto, todoCreateDto } from "./shared/todoDto";
 import ReactFlow, {
@@ -12,13 +12,20 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 export default function Home() {
-  const [newTodo, setNewTodo] = useState({
-    title: "",
-    dueDate: null,
-    description: "",
-    selectedDependencyIds: [],
-  } as todoCreateDto);
+  function createEmptyNewToDo(): todoCreateDto {
+    return {
+      title: "",
+      dueDate: null,
+      description: "",
+      parentIds: [],
+      childIds: [],
+    };
+  }
+  const [newTodo, setNewTodo] = useState(createEmptyNewToDo());
   const [todos, setTodos] = useState([] as TodoDto[]);
+  const [todoIdToClickMap, setTodoIdToClickMap] = useState<Map<number, number>>(
+    new Map()
+  );
 
   useEffect(() => {
     fetchTodos();
@@ -28,8 +35,8 @@ export default function Home() {
     try {
       const res = await fetch("/api/todos");
       const todoItems: TodoDto[] = await res.json();
+      console.log(todoItems);
       setTodos(todoItems);
-      console.log("todo items", todoItems);
     } catch (error) {
       console.error("Failed to fetch todos:", error);
     }
@@ -38,20 +45,31 @@ export default function Home() {
   const handleAddTodo = async () => {
     if (!newTodo.title.trim()) return;
     try {
-      await fetch("/api/todos", {
+      const response = await fetch("/api/todos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newTodo),
       });
-      setNewTodo({
-        title: "",
-        dueDate: null,
-        description: "",
-        selectedDependencyIds: [],
-      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.log(errorData);
+        if (errorData?.error?.toLowerCase().includes("cycle")) {
+          toast.error(
+            "⚠️ Cannot add todo: it would create a circular dependency. Please fix relationship."
+          );
+          return; //don't clear selection let user try to fix relation
+        } else {
+          toast.error("❌ Failed to add todo.");
+        }
+      }
+
+      setNewTodo(createEmptyNewToDo());
+      setTodoIdToClickMap(new Map());
       fetchTodos();
     } catch (error) {
-      console.error("Failed to add todo:", error);
+      console.log(error);
+      toast.error("❌ Failed to add todoooo.");
     }
   };
 
@@ -60,18 +78,13 @@ export default function Home() {
       await fetch(`/api/todos/${id}`, {
         method: "DELETE",
       });
-      setNewTodo({
-        title: "",
-        dueDate: null,
-        description: "",
-        selectedDependencyIds: [],
-      });
+      setNewTodo(createEmptyNewToDo());
+      setTodoIdToClickMap(new Map());
       fetchTodos();
     } catch (error) {
       console.error("Failed to delete todo:", error);
     }
   };
-
   function groupTodosIntoDAGs(todos: TodoDto[]): TodoDto[][] {
     const visited = new Set<number>();
     const idToTodo = new Map<number, TodoDto>(
@@ -156,6 +169,13 @@ export default function Home() {
       )) {
         layer.forEach((todo, index) => {
           const isOverdue = todo.dueDate && new Date(todo.dueDate) < new Date();
+          const bgColor = newTodo.parentIds.includes(todo.id)
+            ? "bg-indigo-500"
+            : newTodo.childIds.includes(todo.id)
+            ? "bg-green-400"
+            : isOverdue
+            ? "bg-red-300"
+            : "bg-white";
 
           nodes.push({
             id: todo.id.toString(),
@@ -168,32 +188,33 @@ export default function Home() {
               label: (
                 <div
                   key={todo.id}
-                  className={`flex justify-between items-center bg-opacity-90 p-4 mb-4 rounded-lg shadow-lg ${
-                    newTodo.selectedDependencyIds.includes(todo.id)
-                      ? "bg-indigo-500"
-                      : isOverdue
-                      ? "bg-red-300"
-                      : "bg-white"
-                  }`}
-                  onClick={() =>
-                    setNewTodo((prev) =>
-                      prev.selectedDependencyIds.includes(todo.id)
-                        ? {
-                            ...prev,
-                            selectedDependencyIds:
-                              prev.selectedDependencyIds.filter(
-                                (id) => id !== todo.id
-                              ),
-                          }
-                        : {
-                            ...prev,
-                            selectedDependencyIds: [
-                              ...prev.selectedDependencyIds,
-                              todo.id,
-                            ],
-                          }
-                    )
-                  }
+                  className={`flex justify-between items-center bg-opacity-90 p-4 mb-4 rounded-lg shadow-lg ${bgColor}`}
+                  onClick={() => {
+                    const count = todoIdToClickMap.get(todo.id) ?? 0;
+                    const newCount = (count + 1) % 3;
+
+                    const updatedClickMap = new Map(todoIdToClickMap);
+                    updatedClickMap.set(todo.id, newCount);
+                    setTodoIdToClickMap(updatedClickMap);
+
+                    setNewTodo((prev) => {
+                      let deps = [...prev.parentIds];
+                      let dependents = [...prev.childIds];
+
+                      // Reset both
+                      deps = deps.filter((id) => id !== todo.id);
+                      dependents = dependents.filter((id) => id !== todo.id);
+
+                      if (newCount === 1) deps.push(todo.id); // 1st click: dependency
+                      if (newCount === 2) dependents.push(todo.id); // 2nd click: dependent
+
+                      return {
+                        ...prev,
+                        parentIds: deps,
+                        childIds: dependents,
+                      };
+                    });
+                  }}
                 >
                   <div className="flex-1">
                     <p className="text-lg font-semibold text-gray-800">
@@ -257,6 +278,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-500 to-red-500 flex flex-col items-center p-4">
+      <Toaster position="top-center" />
       <div className="w-full max-w flex flex-col items-center">
         <h1 className="text-4xl font-bold text-center text-white mb-8">
           Things To Do App

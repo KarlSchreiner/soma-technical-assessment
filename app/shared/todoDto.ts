@@ -6,7 +6,7 @@ export interface TodoDto {
   createdAt: string;
   description: string;
   imageUrl: string;
-  workUnits: number | null;
+  workUnits: number | null; //currently being treated as days
   dependencies: Todo[];
   dependents: Todo[];
 }
@@ -15,5 +15,6 @@ export interface todoCreateDto {
   title: string;
   dueDate: string | null; // ISO string
   description: string;
-  selectedDependencyIds: number[];
+  parentIds: number[]; //the new todo is dependent on these
+  childIds: number[]; //existing todos which are dependent on the new todo
 }

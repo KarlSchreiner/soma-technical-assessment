@@ -16,15 +16,10 @@ export async function GET() {
         },
       })
     ).map((todo) => ({
-      id: todo.id,
-      title: todo.title,
+      ...todo,
       createdAt: todo.createdAt.toISOString(),
       dueDate: todo.dueDate ? todo.dueDate.toISOString() : null,
-      description: todo.description,
-      imageUrl: todo.imageUrl,
       workUnits: todo.workUnits ? todo.workUnits : null,
-      dependencies: todo.dependencies,
-      dependents: todo.dependents,
     }));
     return NextResponse.json(todos);
   } catch (error) {
@@ -35,10 +30,44 @@ export async function GET() {
   }
 }
 
+async function hasCycle(
+  newTodoId: number, // use -1 if creating a new todo
+  parentIds: number[]
+): Promise<boolean> {
+  const visited = new Set<number>();
+  const stack = [...parentIds];
+
+  while (stack.length > 0) {
+    const currentId = stack.pop();
+    if (!currentId) continue;
+
+    if (currentId === newTodoId) {
+      return true; // 🔁 cycle detected
+    }
+
+    if (visited.has(currentId)) continue;
+    visited.add(currentId);
+
+    // Fetch parents of the current node (i.e., dependencies of the todo)
+    const current = await prisma.todo.findUnique({
+      where: { id: currentId },
+      select: { dependencies: { select: { id: true } } },
+    });
+
+    if (current?.dependencies) {
+      const dependencyIds = current.dependencies.map((d) => d.id);
+      stack.push(...dependencyIds);
+    }
+  }
+
+  return false; // ✅ no cycle
+}
+
 export async function POST(request: Request) {
   try {
     const processedRequst = await request.json();
-    const { title, dueDate, description, selectedDependencyIds } =
+    console.log(processedRequst);
+    const { title, dueDate, description, parentIds, childIds } =
       processedRequst;
     let imageUrl = "";
 
@@ -60,6 +89,18 @@ export async function POST(request: Request) {
       console.error("Error fetching Pexels photos:", error);
     }
 
+    if (childIds.length && parentIds.length) {
+      for (const childId of childIds) {
+        const willCycle = await hasCycle(childId, parentIds);
+        if (willCycle) {
+          return NextResponse.json(
+            { error: "Cycle detected: Cannot link todos in this way." },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     const todo = await prisma.todo.create({
       data: {
         title,
@@ -67,7 +108,10 @@ export async function POST(request: Request) {
         description,
         imageUrl,
         dependencies: {
-          connect: selectedDependencyIds.map((id: number) => ({ id })),
+          connect: parentIds.map((id: number) => ({ id })),
+        },
+        dependents: {
+          connect: childIds.map((id: number) => ({ id })),
         },
       },
     });
