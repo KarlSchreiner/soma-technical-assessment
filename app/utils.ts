@@ -72,3 +72,57 @@ export function formatAsLocalDateString(isoDate: string): string {
   const localDate = new Date(year, month - 1, day); // Construct in local time
   return localDate.toDateString(); // Example: "Thu Jul 17 2025"
 }
+
+export function computeLatestDates(
+  todos: TodoDto[],
+  earliestDates: Map<number, { earliestStart: Date; earliestFinish: Date }>
+): Map<number, { latestStart: Date; latestFinish: Date }> {
+  const latestDates = new Map<
+    number,
+    { latestStart: Date; latestFinish: Date }
+  >();
+  const projectEnd = new Date(
+    Math.max(
+      ...Array.from(earliestDates.values()).map((v) =>
+        v.earliestFinish.getTime()
+      )
+    )
+  );
+
+  const idToTodo = new Map<number, TodoDto>(todos.map((t) => [t.id, t]));
+  const visited = new Set<number>();
+
+  const visit = (todo: TodoDto) => {
+    if (visited.has(todo.id)) return;
+    visited.add(todo.id);
+
+    let latestFinish = new Date(projectEnd);
+    if (todo.dependents?.length) {
+      latestFinish = new Date(
+        Math.min(
+          ...todo.dependents.map(
+            (d) =>
+              latestDates.get(d.id)?.latestStart?.getTime() ??
+              projectEnd.getTime()
+          )
+        )
+      );
+    }
+
+    const earliest = earliestDates.get(todo.id);
+    const duration =
+      (earliest?.earliestFinish.getTime() ?? 0) -
+      (earliest?.earliestStart.getTime() ?? 0);
+    const latestStart = new Date(latestFinish.getTime() - duration);
+
+    latestDates.set(todo.id, { latestStart, latestFinish });
+
+    todo.dependencies?.forEach((dep) => {
+      const depTodo = idToTodo.get(dep.id);
+      if (depTodo) visit(depTodo);
+    });
+  };
+
+  todos.filter((t) => !t.dependents?.length).forEach(visit);
+  return latestDates;
+}

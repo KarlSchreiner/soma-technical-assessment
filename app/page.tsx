@@ -11,7 +11,11 @@ import ReactFlow, {
   Position,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { computeEarliestDates, formatAsLocalDateString } from "./utils";
+import {
+  computeEarliestDates,
+  computeLatestDates,
+  formatAsLocalDateString,
+} from "./utils";
 export default function Home() {
   function createEmptyNewToDo(): todoCreateDto {
     return {
@@ -134,6 +138,35 @@ export default function Home() {
     const holidays = new Set<string>();
 
     const earliestDates = computeEarliestDates(todos, holidays);
+
+    const latestDates = computeLatestDates(todos, earliestDates);
+
+    const criticalEdges = new Set<string>();
+    const criticalNodes = new Set<number>();
+
+    for (const todo of todos) {
+      const early = earliestDates.get(todo.id);
+      const late = latestDates.get(todo.id);
+      if (!early || !late) continue;
+
+      const isCritical =
+        early.earliestStart.getTime() === late.latestStart.getTime();
+      if (isCritical) {
+        criticalNodes.add(todo.id);
+
+        todo.dependencies?.forEach((dep) => {
+          const depEarly = earliestDates.get(dep.id);
+          const depLate = latestDates.get(dep.id);
+          if (
+            depEarly &&
+            depLate &&
+            depEarly.earliestStart.getTime() === depLate.latestStart.getTime()
+          ) {
+            criticalEdges.add(`e-${dep.id}-${todo.id}`);
+          }
+        });
+      }
+    }
 
     const spacingX = 600;
     const spacingY = 200;
@@ -291,7 +324,14 @@ export default function Home() {
               source: dep.id.toString(),
               target: todo.id.toString(),
               animated: true,
-              style: { stroke: "#6366f1" },
+              style: {
+                stroke: criticalEdges.has(`e-${dep.id}-${todo.id}`)
+                  ? "#dc2626"
+                  : "#6366f1",
+                strokeWidth: criticalEdges.has(`e-${dep.id}-${todo.id}`)
+                  ? 3
+                  : 1.5,
+              },
             });
           });
         });
