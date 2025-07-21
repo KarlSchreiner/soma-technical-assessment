@@ -67,7 +67,7 @@ export async function POST(request: Request) {
   try {
     const processedRequst = await request.json();
     console.log(processedRequst);
-    const { title, dueDate, description, parentIds, childIds } =
+    const { title, dueDate, description, workUnits, parentIds, childIds } =
       processedRequst;
     let imageUrl = "";
 
@@ -107,6 +107,7 @@ export async function POST(request: Request) {
         dueDate,
         description,
         imageUrl,
+        workUnits,
         dependencies: {
           connect: parentIds.map((id: number) => ({ id })),
         },

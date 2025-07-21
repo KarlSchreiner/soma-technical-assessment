@@ -15,6 +15,7 @@ export interface todoCreateDto {
   title: string;
   dueDate: string | null; // ISO string
   description: string;
+  workUnits: number; //currently being treated as days
   parentIds: number[]; //the new todo is dependent on these
   childIds: number[]; //existing todos which are dependent on the new todo
 }

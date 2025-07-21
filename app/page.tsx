@@ -11,12 +11,14 @@ import ReactFlow, {
   Position,
 } from "reactflow";
 import "reactflow/dist/style.css";
+import { computeEarliestDates, formatAsLocalDateString } from "./utils";
 export default function Home() {
   function createEmptyNewToDo(): todoCreateDto {
     return {
       title: "",
       dueDate: null,
       description: "",
+      workUnits: 1,
       parentIds: [],
       childIds: [],
     };
@@ -35,7 +37,6 @@ export default function Home() {
     try {
       const res = await fetch("/api/todos");
       const todoItems: TodoDto[] = await res.json();
-      console.log(todoItems);
       setTodos(todoItems);
     } catch (error) {
       console.error("Failed to fetch todos:", error);
@@ -53,7 +54,6 @@ export default function Home() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.log(errorData);
         if (errorData?.error?.toLowerCase().includes("cycle")) {
           toast.error(
             "⚠️ Cannot add todo: it would create a circular dependency. Please fix relationship."
@@ -68,8 +68,7 @@ export default function Home() {
       setTodoIdToClickMap(new Map());
       fetchTodos();
     } catch (error) {
-      console.log(error);
-      toast.error("❌ Failed to add todoooo.");
+      toast.error("❌ Failed to add todo.");
     }
   };
 
@@ -132,20 +131,19 @@ export default function Home() {
     const dagGroups = groupTodosIntoDAGs(todos);
     const nodes: Node[] = [];
     const edges: Edge[] = [];
+    const holidays = new Set<string>();
 
-    const spacingX = 600; // horizontal distance between DAGs
+    const earliestDates = computeEarliestDates(todos, holidays);
+
+    const spacingX = 600;
     const spacingY = 200;
 
     dagGroups.forEach((group, groupIndex) => {
+      // ...existing group logic...
       const idToTodo = new Map<number, TodoDto>(group.map((t) => [t.id, t]));
       const depths = new Map<number, number>();
 
-      // Find roots (nodes with no dependencies)
-      const roots = group.filter(
-        (todo) => !todo.dependencies || todo.dependencies.length === 0
-      );
-
-      // Compute max depth from root → leaf using DFS
+      const roots = group.filter((t) => !t.dependencies?.length);
       function computeDepth(todo: TodoDto, depth: number) {
         if ((depths.get(todo.id) ?? -1) >= depth) return;
         depths.set(todo.id, depth);
@@ -154,8 +152,7 @@ export default function Home() {
           if (fullDep) computeDepth(fullDep, depth + 1);
         });
       }
-
-      roots.forEach((root) => computeDepth(root, 0));
+      roots.forEach((r) => computeDepth(r, 0));
 
       // Group todos by depth for horizontal layout
       const layers = new Map<number, TodoDto[]>();
@@ -164,93 +161,121 @@ export default function Home() {
         if (!layers.has(depth)) layers.set(depth, []);
         layers.get(depth)!.push(todo);
       }
+
       for (const [depth, layer] of [...layers.entries()].sort(
         (a, b) => a[0] - b[0]
       )) {
         layer.forEach((todo, index) => {
-          const isOverdue = todo.dueDate && new Date(todo.dueDate) < new Date();
+          const dateInfo = earliestDates.get(todo.id);
           const bgColor = newTodo.parentIds.includes(todo.id)
             ? "bg-indigo-500"
             : newTodo.childIds.includes(todo.id)
             ? "bg-green-400"
-            : isOverdue
+            : todo.dueDate &&
+              dateInfo &&
+              todo.dueDate < dateInfo.earliestFinish.toISOString() //If our earliest finish date is after our due date we need to flag
             ? "bg-red-300"
             : "bg-white";
+          const projectStart = new Date(
+            Math.min(
+              ...Array.from(earliestDates.values()).map((d) =>
+                d.earliestStart.getTime()
+              )
+            )
+          );
+
+          const daysFromStart = Math.floor(
+            ((dateInfo?.earliestStart?.getTime?.() ?? projectStart.getTime()) -
+              projectStart.getTime()) /
+              (1000 * 60 * 60 * 24)
+          );
 
           nodes.push({
             id: todo.id.toString(),
             type: "default",
             position: {
-              x: groupIndex * 800 + index * spacingX, // spread out horizontally across layers
-              y: depth * spacingY,
+              x: groupIndex * 800 + index * spacingX,
+              y: daysFromStart * 200,
             },
             data: {
               label: (
                 <div
                   key={todo.id}
-                  className={`flex justify-between items-center bg-opacity-90 p-4 mb-4 rounded-lg shadow-lg ${bgColor}`}
+                  className={`flex flex-col bg-opacity-90 p-4 mb-4 rounded-lg shadow-lg ${bgColor}`}
                   onClick={() => {
                     const count = todoIdToClickMap.get(todo.id) ?? 0;
                     const newCount = (count + 1) % 3;
-
                     const updatedClickMap = new Map(todoIdToClickMap);
                     updatedClickMap.set(todo.id, newCount);
                     setTodoIdToClickMap(updatedClickMap);
 
                     setNewTodo((prev) => {
-                      let deps = [...prev.parentIds];
-                      let dependents = [...prev.childIds];
-
-                      // Reset both
-                      deps = deps.filter((id) => id !== todo.id);
-                      dependents = dependents.filter((id) => id !== todo.id);
-
-                      if (newCount === 1) deps.push(todo.id); // 1st click: dependency
-                      if (newCount === 2) dependents.push(todo.id); // 2nd click: dependent
-
-                      return {
-                        ...prev,
-                        parentIds: deps,
-                        childIds: dependents,
-                      };
+                      let deps = [...prev.parentIds].filter(
+                        (id) => id !== todo.id
+                      );
+                      let dependents = [...prev.childIds].filter(
+                        (id) => id !== todo.id
+                      );
+                      if (newCount === 1) deps.push(todo.id);
+                      if (newCount === 2) dependents.push(todo.id);
+                      return { ...prev, parentIds: deps, childIds: dependents };
                     });
                   }}
                 >
-                  <div className="flex-1">
-                    <p className="text-lg font-semibold text-gray-800">
-                      {todo.title}
-                    </p>
-                    <p className="text-sm text-gray-600">{todo.description}</p>
-                  </div>
-                  <span className="text-sm text-gray-600 whitespace-nowrap">
-                    {todo.dueDate}
-                  </span>
-                  {todo.imageUrl && (
-                    <img
-                      src={todo.imageUrl}
-                      alt={todo.title}
-                      className="w-12 h-12 object-cover rounded-full"
-                    />
-                  )}
-                  <button
-                    onClick={() => handleDeleteTodo(todo.id)}
-                    className="text-red-500 hover:text-red-700 transition duration-300"
-                  >
-                    {/* Delete Icon */}
-                    <svg
-                      className="w-6 h-6"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
+                  <div className="flex justify-between items-center">
+                    <div className="flex-1">
+                      <p className="text-lg font-semibold text-gray-800">
+                        {todo.title}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {todo.description}
+                      </p>
+                      {dateInfo && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          🕒 Start:{" "}
+                          {formatAsLocalDateString(
+                            dateInfo.earliestStart.toISOString()
+                          )}{" "}
+                          <br />⏳ Finish:{" "}
+                          {formatAsLocalDateString(
+                            dateInfo.earliestFinish.toISOString()
+                          )}
+                          {todo.dueDate && (
+                            <>
+                              <br /> 📅 Due Date:
+                              {` ${formatAsLocalDateString(todo.dueDate)}`}
+                            </>
+                          )}
+                        </p>
+                      )}
+                    </div>
+
+                    {todo.imageUrl && (
+                      <img
+                        src={todo.imageUrl}
+                        alt={todo.title}
+                        className="w-12 h-12 object-cover rounded-full"
                       />
-                    </svg>
-                  </button>
+                    )}
+                    <button
+                      onClick={() => handleDeleteTodo(todo.id)}
+                      className="text-red-500 hover:text-red-700 transition duration-300"
+                    >
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               ),
             },
@@ -272,8 +297,10 @@ export default function Home() {
         });
       }
     });
+
     return { nodes, edges };
   }
+
   const { nodes, edges } = layoutTodosWithSpacing(todos);
 
   return (
@@ -283,6 +310,29 @@ export default function Home() {
         <h1 className="text-4xl font-bold text-center text-white mb-8">
           Things To Do App
         </h1>
+        <div className="bg-white text-sm text-gray-700 rounded-md p-3 mb-4 max-w-3xl shadow">
+          <p>
+            <strong>Instructions:</strong> Click an existing todo to define
+            relationships for the one you're creating:
+          </p>
+          <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
+            <li>
+              <span className="text-indigo-600 font-semibold">
+                Click once (Indigo)
+              </span>
+              : The selected todo must be completed <strong>before</strong> the
+              one you're creating can begin.
+            </li>
+            <li>
+              <span className="text-green-600 font-semibold">
+                Click twice (Green)
+              </span>
+              : The todo you're creating must be completed{" "}
+              <strong>before</strong> the selected one can begin.
+            </li>
+            <li>Click a third time to remove the connection.</li>
+          </ul>
+        </div>
         <div className="flex mb-6">
           <input
             type="text"
@@ -307,18 +357,37 @@ export default function Home() {
               }))
             }
           />
-          <input
-            type="date"
-            value={newTodo.dueDate ? newTodo.dueDate.split("T")[0] : ""}
-            onChange={(e) =>
-              setNewTodo((prev) => ({
-                ...prev,
-                dueDate: new Date(e.target.value)
-                  ? new Date(e.target.value).toISOString()
-                  : null,
-              }))
-            }
-          />
+          <label className="flex items-center  bg-white">
+            How many days will this take?
+            <input
+              type="number"
+              min={1}
+              className="ml-2 p-2 rounded text-gray-800 w-20"
+              value={newTodo.workUnits}
+              onChange={(e) =>
+                setNewTodo((prev) => ({
+                  ...prev,
+                  workUnits: parseInt(e.target.value),
+                }))
+              }
+            />
+          </label>
+          <label className="flex items-center  bg-white">
+            Due Date
+            <input
+              type="date"
+              className="pl-2"
+              value={newTodo.dueDate ? newTodo.dueDate.split("T")[0] : ""}
+              onChange={(e) => {
+                setNewTodo((prev) => ({
+                  ...prev,
+                  dueDate: new Date(e.target.value)
+                    ? new Date(e.target.value).toISOString()
+                    : null,
+                }));
+              }}
+            />
+          </label>
           <button
             onClick={handleAddTodo}
             className="bg-white text-indigo-600 p-3 rounded-r-full hover:bg-gray-100 transition duration-300"
