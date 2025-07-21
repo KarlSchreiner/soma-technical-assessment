@@ -54,15 +54,19 @@ Implement a task dependency system that allows tasks to depend on other tasks. T
 
 # Solution: 
 Video Demonstration 
-Part 1: 
+### Part 1: 
 Note: I changed due date to highlight red if the earliest possible finish time was after the due date (seemed a lot more useful) 
-Part 2: 
+### Part 2: 
 I added .env files and you will need to add your own pexel key if you want to run that locally 
-Part 3: 
+### Part 3: 
 1. 1 click to add the selected todo as a parent and 2 clicks to add the selected todo as a child
 2. cycles are detected and a toast error is thrown before db write--allowing the user to fix their mistake
 3. critical path is highlighted in red
 4. earlist possible start date and earliest possible end date arre both displayed 
-
+### future improvments 
+1. improve delete logic (if you delete a parent with multiple children you get unexpected behavior)
+2. have earliest finishes adjust for weekends and holidays (code is built to easily be extended this way)
+3. have clearer db names for workUnits and dependency relations
+4. allow for editing of existing relations 
 
 Thanks for your time and effort. We'll be in touch soon!
