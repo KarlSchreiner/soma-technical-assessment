@@ -54,8 +54,9 @@ Implement a task dependency system that allows tasks to depend on other tasks. T
 
 # Solution: 
 Video Demonstration 
+https://drive.google.com/file/d/1eAHKz6L6N3dgc5aWqf-fg6ICeaVMVK7V/view?usp=sharing
 ### Part 1: 
-Note: I changed due date to highlight red if the earliest possible finish time was after the due date (seemed a lot more useful) 
+**Note: I changed due date to highlight red if the earliest possible finish time was after the due date (seemed a lot more useful) **
 ### Part 2: 
 I added .env files and you will need to add your own pexel key if you want to run that locally 
 ### Part 3: 
